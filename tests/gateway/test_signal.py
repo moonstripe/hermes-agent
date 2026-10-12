@@ -143,9 +143,28 @@ class TestSignalHelpers:
 
         expected_data = base64.b64encode(b"OggS test audio").decode("ascii")
         assert converted is not params
-        assert converted["attachments"][0] == f"data:audio/ogg;base64,{expected_data}"
+        assert (
+            converted["attachments"][0]
+            == f"data:audio/ogg;filename=voice.ogg;base64,{expected_data}"
+        )
         assert converted["attachments"][1:] == ["data:image/png;base64,AAAA", "/missing.jpg"]
         assert params["attachments"][0] == str(attachment)
+
+    @pytest.mark.asyncio
+    async def test_inline_send_attachments_url_escapes_filename(self, tmp_path):
+        """Filenames with spaces or URI delimiters must not corrupt the data URI."""
+        from gateway.platforms.signal import _inline_send_attachments
+
+        attachment = tmp_path / "Q3 report;final,v2.pdf"
+        attachment.write_bytes(b"%PDF-1.7")
+
+        converted = await _inline_send_attachments({"attachments": [str(attachment)]})
+
+        uri = converted["attachments"][0]
+        assert uri.startswith(
+            "data:application/pdf;filename=Q3%20report%3Bfinal%2Cv2.pdf;base64,"
+        )
+        assert base64.b64decode(uri.split(";base64,", 1)[1]) == b"%PDF-1.7"
 
     @pytest.mark.asyncio
     async def test_inline_send_attachments_leaves_no_local_files_unchanged(self):
@@ -924,7 +943,9 @@ class TestSignalSendResultValidation:
         assert result == {"timestamp": 123}
         payload = mock_client.post.await_args.kwargs["json"]
         expected_data = base64.b64encode(b"\x89PNG image bytes").decode("ascii")
-        assert payload["params"]["attachments"] == [f"data:image/png;base64,{expected_data}"]
+        assert payload["params"]["attachments"] == [
+            f"data:image/png;filename=photo.png;base64,{expected_data}"
+        ]
 
     @pytest.mark.asyncio
     async def test_rpc_raises_rate_limit_on_results_failure(self, monkeypatch):

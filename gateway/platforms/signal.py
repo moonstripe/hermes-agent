@@ -96,11 +96,17 @@ def _ext_to_mime(ext: str) -> str:
 
 
 def _path_to_data_uri(path: str) -> str:
-    """Read a local attachment path and return a Signal-compatible data URI."""
+    """Read a local attachment path and return a Signal-compatible data URI.
+
+    The original filename is carried as a URL-escaped ``filename`` parameter
+    (RFC 2397) so signal-cli names the received attachment after the source
+    file instead of deriving a name from the MIME type.
+    """
     data = Path(path).read_bytes()
     mime = _ext_to_mime(Path(path).suffix)
     encoded = base64.b64encode(data).decode("ascii")
-    return f"data:{mime};base64,{encoded}"
+    name = quote(Path(path).name, safe="")
+    return f"data:{mime};filename={name};base64,{encoded}"
 
 
 async def _inline_send_attachments(params: dict) -> dict:
